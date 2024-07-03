@@ -40,7 +40,12 @@ def convert_to_id(e_input):
     elif isinstance(e_input, str) and e_input.isnumeric():
         ret_value = e_input
     else:
-        raise TypeError(
-            f"Must provide an episode object or id, either str or int.")
+        try:
+            # The object may not match the exact Episode given, but if
+            # it has an id attribute, it's probably an Episode.
+            ret_value = e_input.id
+        except Error:
+            raise TypeError(
+                f"Must provide an episode object or id, either str or int.")
 
     return ret_value

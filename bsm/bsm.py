@@ -11,23 +11,27 @@ class Manager():
         Attributes:
             id(str): Podcast Id.
             token(str): API Token.
-            name(str): Optional name.
+            user_agent(str): User agent. Buzzsprout API requires setting it to a unique value.
     """
 
-    def __init__(self, id, token):
+    def __init__(self, id, token, user_agent: str = "bsm-manager"):
         """
         Constructor
 
         Parameters:
             id(str): Podcast Id.
             token(str): API Token.
-            name(str): Optional name.
+            user_agent(str): User agent. Buzzsprout API requires setting it to a unique value.
         """
         self.id = id
         self.token = token
+        self.user_agent = user_agent
 
         self.base_url = f"https://www.buzzsprout.com/api/{id}"
         self.access_params = {'api_token': self.token}
+
+        self.session = requests.Session()
+        self.session.headers.update({'User-Agent': self.user_agent})
 
         self.cache_headers = None
         self.cache_episodes = None
@@ -35,27 +39,26 @@ class Manager():
     def test_api(self):
         """Returns requests.response object for GET request to Buzzsprout API"""
 
-        test_response = requests.get(
+        test_response = self.session.get(
             f"{self.base_url}/episodes.json", self.access_params)
         return test_response
 
     def ok(self):
         """Checks for Response 200 and returns Bool"""
 
-        test_response = requests.get(
+        test_response = self.session.get(
             f"{self.base_url}/episodes.json", self.access_params)
         return test_response.ok
 
     def _update(self):
         """Requests all episode objects from API and caches the response if response isn't '304 Not Modified'"""
 
-        # This catches an issue where a Manager is provided a header cache, but doesn't contain any episode cache
+        # This catches an issue where a Manager is provided a header cache, but doesn't contain any episode cache    
+        headers = self.session.headers.copy()
         if self.cache_episodes != None:
-            headers = self.cache_headers
-        else:
-            headers = ""
+            headers.update(self.cache_headers)
         # -------------------------------------------------------------------------------------------------------
-        response = requests.get(
+        response = self.session.get(
             url=f"{self.base_url}/episodes.json",
             headers=headers,
             params=self.access_params
@@ -90,8 +93,7 @@ class Manager():
         Parameters:
             id(str): Episode ID
         """
-        response = requests.get(
-            f"{self.base_url}/episodes/{id}.json", self.access_params)
+        response = self.session.get(f"{self.base_url}/episodes/{id}.json", params=self.access_params)
         if response.ok:
             return Episode(**response.json())
         else:
@@ -149,9 +151,10 @@ class Manager():
 
         f_id = convert_to_id(episode)
 
-        headers = {"Content-Type": "application/json"}
+        headers = self.session.headers.copy()
+        headers.update({"Content-Type": "application/json"})
         payload = json.dumps(kwargs)
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.base_url}/episodes/{f_id}.json",
             headers=headers,
             data=payload,
@@ -175,7 +178,7 @@ class Manager():
 
         payload = episode.get_existing_data()
         files = [('audio_file', open(file_path, 'rb'))]
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.base_url}/episodes/{f_id}.json",
             data=payload,
             params=self.access_params,
@@ -200,7 +203,7 @@ class Manager():
 
         payload = episode.get_existing_data()
         files = [('artwork_file', open(file_path, 'rb'))]
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.base_url}/episodes/{f_id}.json",
             data=payload,
             params=self.access_params,
@@ -222,9 +225,10 @@ class Manager():
 
         f_id = convert_to_id(episode)
 
-        headers = {"Content-Type": "application/json"}
+        headers = self.session.headers.copy()
+        headers.update({"Content-Type": "application/json"})
         payload = json.dumps({'private': "true"})
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.base_url}/episodes/{f_id}.json",
             headers=headers,
             data=payload,
@@ -244,9 +248,10 @@ class Manager():
 
         f_id = convert_to_id(episode)
 
-        headers = {"Content-Type": "application/json"}
+        headers = self.session.headers.copy()
+        headers.update({"Content-Type": "application/json"})
         payload = json.dumps({'private': "false"})
-        response = requests.put(
+        response = self.session.put(
             url=f"{self.base_url}/episodes/{f_id}.json",
             headers=headers,
             data=payload,
@@ -287,10 +292,12 @@ class Manager():
                 "post_episode() requires a 'title' attribute. This can be an attribute of episode argument or given as a kwarg")
 
         encoder = MultipartEncoder(encode_data)
-        response = requests.post(
+        headers = self.session.headers.copy()
+        headers.update({'Content-Type': encoder.content_type})
+        response = self.session.post(
             f"{self.base_url}/episodes.json",
             data=encoder,
-            headers={'Content-Type': encoder.content_type},
+            headers=headers,
             params=self.access_params
         )
         return BSMResponse(response)
@@ -306,8 +313,9 @@ class Manager():
     #     else:
     #         raise Exception("Must provide an episode object or id")
 
-    #     headers = {"Content-Type": "application/json"}
-    #     response = requests.delete(
+    #     headers = self.session.headers.copy()
+    #     headers = headers.update({'Content-Type': 'application/json'})
+    #     response = self.session.delete(
     #         url=f"{self.base_url}/episodes/{f_id}",
     #         # headers=headers,
     #         params=self.access_params
